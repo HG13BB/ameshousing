@@ -1,0 +1,207 @@
+---
+title: "Ames Housing ML"
+author: "Henry Greeley"
+date: "October 13, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Load data
+```{r}
+library(dplyr)   # gives mutate_if
+library(forcats) # gives fct_explicit_na
+library(dummies)  #encoding
+
+train <- read.csv("train.csv")
+
+#Replace NA with value 0 or (missing)
+train[is.na(train)] <- 0
+
+#replace nas for factors with characters
+train = train %>% 
+	mutate_if(is.factor, fct_explicit_na)
+
+train = train %>% 
+	mutate_if(is.factor, fct_explicit_na, na_level = 'NA')
+
+```
+
+#load prediction data
+```{r}
+
+test <- read.csv("test.csv")
+
+#Replace NA with value 0 or (missing)
+test[is.na(test)] <- 0
+
+test = test %>% 
+	mutate_if(is.factor, fct_explicit_na)
+
+test = test %>% 
+	mutate_if(is.factor, fct_explicit_na, na_level = 'NA')
+
+```
+
+
+#harmonize columns between data frames with dummy encoding for all records
+
+```{r}
+
+traintest = rbind(train[,-ncol(train)], test)
+
+```
+
+#dummy encoding for all variables contained in both training and test sets
+```{r}
+ttdummy <- dummy.data.frame(traintest)
+
+#fix column names to syntactically valid names
+names(ttdummy) <- make.names(names(ttdummy))
+#names(ttdummy)
+```
+
+#merge the dummy data back to train data
+```{r}
+train2 <- merge(ttdummy,train[,c(1,ncol(train))], by = "Id")
+```
+
+
+#fit random forest regressor
+```{r}
+library(randomForest)
+
+ames.rf = randomForest(SalePrice ~ . , data = train2 )
+
+ames.rf
+```
+
+```{r}
+plot(ames.rf)
+
+```
+
+#connect test data to dummy variables created earlier
+```{r}
+test2 <- ttdummy[1461:nrow(ttdummy),]
+
+nrow(test2)
+```
+
+
+#Prediction on test set
+```{r}
+pred <- predict(ames.rf, test2)
+
+#pred
+```
+
+#output file for kaggle
+```{r}
+
+pred <- data.frame(pred)
+modout <- cbind(test2[,1:1],pred)
+names(modout) <-  c("Id", "SalePrice")
+```
+
+```{r}
+write.csv(modout, file = "ameskaggle.csv")
+```
+
+
+
+#Build shiny app to visually analyze variables efficiently
+```{r}
+library(shiny)
+```
+
+```{r}
+# Define UI for application that draws a histogram
+ui <- fluidPage(
+
+# Give the page a title
+titlePanel("Ames Housing Feature Visualization"),
+
+# Generate a row with a sidebar
+sidebarLayout(
+
+# Define the sidebar with one input
+sidebarPanel(
+selectInput("region", "Feature:",
+choices=colnames(tdata)),
+hr(),
+helpText("Select Items to Analyze")
+),
+
+# Create a spot for the barplot
+mainPanel(
+plotOutput("phonePlot")
+)
+)
+)
+```
+
+```{r}
+# Define server logic required to draw a histogram
+server <- function(input, output) {
+  
+  # Fill in the spot we created for a plot
+  output$phonePlot <- renderPlot({
+    
+    # Render a barplot
+    barplot(table(tdata[,input$region]), 
+            main=input$region,
+            ylab="Frequency",
+            xlab="Feature")
+  })
+}
+
+# Run the application 
+shinyApp(ui = ui, server = server)
+```
+#Create training and test datasets
+```{r}
+library(ISLR)
+smp_siz = floor(0.75*nrow(tdata)) 
+smp_siz
+```
+
+```{r}
+library(dplyr)   # gives mutate_if
+library(forcats) # gives fct_explicit_na
+
+set.seed(13)   # set seed to ensure you always have same random numbers generated
+train_ind = sample(seq_len(nrow(tdata)),size = smp_siz)  # randomly select 75% of rows
+
+train = tdata[train_ind,] #training dataset
+train[is.na(train)] <- 0
+
+#Change NA to factor or 0
+
+train = train %>% 
+	mutate_if(is.factor, fct_explicit_na)
+
+train = train %>% 
+	mutate_if(is.factor, fct_explicit_na, na_level = 'NA')
+
+
+test = tdata[-train_ind,]  #test dataset
+test[is.na(test)] <- 0
+
+test = test %>% 
+	mutate_if(is.factor, fct_explicit_na)
+
+test = test %>% 
+	mutate_if(is.factor, fct_explicit_na, na_level = 'NA')
+
+#test[is.na(test)] <- "NA"
+
+```
+
+
+
+
+
+
